@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!--
+To change this license header, choose License Headers in Project Properties.
+To change this template file, choose Tools | Templates
+and open the template in the editor.
+-->
+<html>
+    <head>
+        <title>Major</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script type="text/javascript">
+            var _l = "/major";
+            dojoConfig = {
+                    parseOnLoad: false,
+                    async: true,
+                    tlmSiblingOfDojo: false,
+                    baseUrl: _l+"/js/",
+                    dojoBlankHtmlUrl: _l + '/blank.html',
+                    packages:[
+                                //{name: 'yug', location: _l + '/js', main: 'app' }
+                             ]
+            };
+        </script>
+        <script src="//ajax.googleapis.com/ajax/libs/dojo/1.10.4/dojo/dojo.js"></script>
+        <style type="text/css">
+            .wrap {max-width: 900px;margin: 0 auto;}
+            .wrap ul{list-style-type: none;}
+            .wrap h2{font-weight: 300;}
+        </style>
+        <script type="text/javascript">
+            require([
+                        "dojo/dom",
+                        "dojo/dom-attr",
+                        "dojo/request/xhr",
+                        "dojo/domReady!"
+                    ], function(dom, attr, xhr){
+                        
+                var node = dom.byId("main");
+                
+                xhr(_l + "/ping.json",{handleAs:'json'}).then(
+                function(resp){
+                    var s = '<ul>';
+                    s += '<li><h2>Succeeded!</h2></li>';
+                    s += '<li>Dojo #' + dojo.version + '</li>';
+                    if (resp.err){
+                        s += '<li>Err: ' + resp.msg + '</li>';
+                    } else {
+                        s += '<li>Db information: ' + resp.val + '</li>';
+                    }
+                    s += '</ul>';
+                    attr.set(node, 'innerHTML', s);
+                },
+                function(err){
+                    var s = '<ul>';
+                    s += '<li><h2>Error!</h2></h2>';
+                    s += '<li>Dojo v.' + dojo.version + '</li>';
+                    s += '<li>Err:' + err + '</li>';
+                    s += '</ul>';
+                    attr.set(node, 'innerHTML', s);
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <div class="wrap">
+            <div id="main">Loading...</div>
+        </div>
+    </body>
+</html>
