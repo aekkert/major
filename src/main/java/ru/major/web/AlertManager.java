@@ -241,9 +241,9 @@ public class AlertManager {
 
                     for (int i = 0 ; i < rs.length(); i++) {
                         a.alertMailTo = rs.getJSONObject(0).getString("email");
-                        sendMail(a);
+//                        sendMail(a);
                         Bot b = Bot.getInstance();
-                        b.sendPostData(Long.parseLong(rs.getJSONObject(0).getString("chatid")), ps.getJSONObject(j).getString("post_content"), "10:30", a.alertMailImg);
+                        b.sendModeData(Long.parseLong(rs.getJSONObject(0).getString("chatid")), ps.getJSONObject(j).getString("postid"), ps.getJSONObject(j).getString("post_content"), a.alertMailImg);
                     }
                 }
             }
