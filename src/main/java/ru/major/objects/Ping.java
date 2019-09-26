@@ -16,7 +16,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import ru.major.db.DataEng;
 import ru.major.web.Action;
-import ru.major.web.AlertManager;
 
 /**
  *
@@ -34,14 +33,6 @@ public class Ping extends DataEng implements Action{
         o.put("q", request.getParameter(MODE_PARAM));
         HttpSession ss = request.getSession();
         o.put("s", (ss!=null)?ss.getId().replaceAll("-", ""):"00");
-        
-        AlertManager m = new AlertManager();
-        JSONObject oo = new org.json.JSONObject();
-        oo.put("user_email", "alex@kih.ru");
-        oo.put("postid", "512");
-        oo.put("codepay", "6a1FNoUrWX");
-        oo.put("login", "igor.lix");
-        m.sendModeration("512");
         
         try {
             rs = getData(0, new HashMap());

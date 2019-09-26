@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Context antiJARLocking="true" path="/major" allowCasualMultipartParsing="true">
-    <ResourceLink name="jdbc/major" global="jdbc/major" type="javax.sql.DataSource" />
+<Context allowCasualMultipartParsing="true" antiJARLocking="true" path="/major">
+  <ResourceLink global="jdbc/major" name="jdbc/major" type="javax.sql.DataSource"/>
 </Context>

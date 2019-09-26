@@ -76,9 +76,6 @@ public class AlertManager {
     
     private class Alert {
 
-        private String alertRegID;
-        private String alertName;
-        
         private String alertMailFrom;
         private String alertMailFromName;
         private String alertMailTo;
@@ -90,6 +87,7 @@ public class AlertManager {
     }
     
     public void send(String what, JSONObject o) {
+        String res = null;
         Cache c = Cache.getInstance();
         Alert a = new Alert();
         switch ( what ) {
@@ -108,6 +106,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert2");
+                break;
             case "newerr":
                 a.alertMailFrom = c.getSett("mailModeration");
                 a.alertMailSubj = "Модерация";
@@ -115,6 +114,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert3");
+                break;
             case "allow":
                 a.alertMailFrom = c.getSett("mailCrowdfunding");
                 a.alertMailSubj = "Краудфандинг";
@@ -122,6 +122,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert4");
+                break;
             case "notes":
                 a.alertMailFrom = c.getSett("mailModeration");
                 a.alertMailSubj = "Модерация";
@@ -129,6 +130,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert5");
+                break;
             case "deny":
                 a.alertMailFrom = c.getSett("mailModeration");
                 a.alertMailSubj = "Модерация";
@@ -136,6 +138,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert6");
+                break;
             case "setpay":
                 a.alertMailFrom = c.getSett("mailCrowdfunding");
                 a.alertMailSubj = "Краудфандинг";
@@ -143,6 +146,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert7");
+                break;
             case "pub":
                 a.alertMailFrom = c.getSett("mailInfo");
                 a.alertMailSubj = "Инфо";
@@ -150,6 +154,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert8");
+                break;
             case "payerr":
                 a.alertMailFrom = c.getSett("mailCrowdfunding");
                 a.alertMailSubj = "Краудфандинг";
@@ -157,6 +162,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert10");
+                break;
             case "payerr2":
                 a.alertMailFrom = c.getSett("mailCrowdfunding");
                 a.alertMailSubj = "Краудфандинг";
@@ -164,6 +170,7 @@ public class AlertManager {
                 a.alertMailTo = o.getString("user_email");
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert9");
+                break;
         }
         a.alertMailFromName = "Главный в интаграм";
         try {
@@ -193,21 +200,21 @@ public class AlertManager {
         try {
             a.alertMailTmpl = a.alertMailTmpl.replace("{LOGIN}", o.getString("login"));
         } catch (java.lang.Throwable tw) {}
-        sendMail(a);
+        res = sendMail(a);
+        o.put("result", res);
+        o.put("evt", what);
+        putEvent(o);
     }
     
-    public void sendModeration(String postID) {
+    public void sendModeration(JSONObject o) {
         DataEng data = new DataEng();
         JSONArray rs = new org.json.JSONArray();
-        JSONArray ps = new org.json.JSONArray();
         Map<String, String[]> params = new HashMap();
-        params.put("post", new String[]{postID});
         try {
             rs = data.getData(15, params);
-            ps = data.getData(16, params);
         } catch (Throwable tw) {
         }
-        if ( ps .length() > 0 ) {
+        if ( o.length() > 0 ) {
             Cache c = Cache.getInstance();
             for (int j = 0 ; j < rs.length(); j++) {
                 Alert a = new Alert();
@@ -216,21 +223,21 @@ public class AlertManager {
                     a.alertMailTmpl = a.alertMailTmpl.replace("{LOGO}", c.getSett("logo"));
                 } catch (java.lang.Throwable tw) {}
                 try {
-                    a.alertMailTmpl = a.alertMailTmpl.replace("{LOGIN}", ps.getJSONObject(j).getString("login"));
+                    a.alertMailTmpl = a.alertMailTmpl.replace("{LOGIN}", o.getString("login"));
                 } catch (java.lang.Throwable tw) {}
                 try {
-                    a.alertMailTmpl = a.alertMailTmpl.replace("{POSTURI}", ps.getJSONObject(j).getString("postid"));
+                    a.alertMailTmpl = a.alertMailTmpl.replace("{POSTURI}", o.getString("postid"));
                 } catch (java.lang.Throwable tw) {}
                 try {
                     BufferedImage image = ImageIO.read(getClass().getClassLoader().getResourceAsStream("border.jpg"));
-                    a.alertMailImg = Tools.makeImage(image, ps.getJSONObject(j).getString("imguri"));
+                    a.alertMailImg = Tools.makeImage(image, o.getString("imguri"));
                     a.alertMailTmpl = a.alertMailTmpl.replace("{POSTIMG}", a.alertMailImg);
                 } catch (java.lang.Throwable tw) {}
                 try {
-                    a.alertMailTmpl = a.alertMailTmpl.replace("{POSTCONTENT}", ps.getJSONObject(j).getString("post_content"));
+                    a.alertMailTmpl = a.alertMailTmpl.replace("{POSTCONTENT}", o.getString("post_content"));
                 } catch (java.lang.Throwable tw) {}
                 try {
-                    a.alertMailTmpl = a.alertMailTmpl.replace("{POSTID}", ps.getJSONObject(j).getString("postid"));
+                    a.alertMailTmpl = a.alertMailTmpl.replace("{POSTID}", o.getString("postid"));
                 } catch (java.lang.Throwable tw) {}
                 if ( rs.length() > 0 ) {
                     a.alertMailFrom = c.getSett("mailModeration");
@@ -241,17 +248,21 @@ public class AlertManager {
 
                     for (int i = 0 ; i < rs.length(); i++) {
                         a.alertMailTo = rs.getJSONObject(0).getString("email");
-//                        sendMail(a);
+                        String res = sendMail(a);
+                        o.put("user_email", a.alertMailTo);
+                        o.put("result", res);
+                        o.put("evt", "moderation");
+                        putEvent(o);
                         Bot b = Bot.getInstance();
-                        b.sendModeData(Long.parseLong(rs.getJSONObject(0).getString("chatid")), ps.getJSONObject(j).getString("postid"), ps.getJSONObject(j).getString("post_content"), a.alertMailImg);
+                        b.sendModeData(Long.parseLong(rs.getJSONObject(0).getString("chatid")), o, a.alertMailImg);
                     }
                 }
             }
         }
     }
     
-    private boolean sendMail(Alert alert) {
-        boolean res     = false;
+    private String sendMail(Alert alert) {
+        String res     = null;
         try {
             if (properties.contains("mail.smtp.host")) {
                 properties.remove("mail.smtp.host");
@@ -261,7 +272,7 @@ public class AlertManager {
             EAuth auth = new EAuth(alert.alertMailFrom, alert.alertMailPwd);
 
             String s = alert.alertMailTmpl;
-            Session session = Session.getDefaultInstance(properties, auth);
+            Session session = Session.getInstance(properties, auth);
             MimeMessage message = new MimeMessage(session);
             message.addHeader("Content-type", "text/HTML;charset=UTF-8");
             message.setSentDate(new java.util.Date());
@@ -282,22 +293,19 @@ public class AlertManager {
             }
             t.connect(properties.getProperty("mail.smtp.host"), auth.user, auth.password);
             t.send(message);
-            alert.alertName = "SUCCESSED!!!";
-            res = true;
+            t.close();
+            res = "Successed";
         } catch (java.lang.Throwable tw) {
-            alert.alertName = tw.getMessage();
+            res = tw.getMessage();
         }
-//        putEvent(alert);
         return res;
     }
 
-    private void putEvent(Alert a) {
+    private void putEvent(JSONObject o) {
         Map<String, String[]> params = new HashMap();
-        params.put("id", new String[]{a.alertRegID});
-        params.put("from", new String[]{a.alertMailFrom});
-        params.put("to", new String[]{a.alertMailTo});
-        params.put("name", new String[]{a.alertName});
-        
+        for (String key : o.keySet()) {
+            params.put(key, new String[]{o.getString(key)});
+        }
         try {
             DataEng data = new DataEng();
             JSONArray rs = data.getData(1001, params);

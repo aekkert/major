@@ -24,6 +24,7 @@ import org.ehcache.config.builders.CacheManagerBuilder;
 import org.ehcache.config.builders.ExpiryPolicyBuilder;
 import org.ehcache.config.builders.ResourcePoolsBuilder;
 import ru.major.util.NewCache;
+import ru.major.web.AlertManager;
 /**
  *
  * @author alex
@@ -51,12 +52,11 @@ public class Task extends DataEng implements Action {
         Integer res = 0;
         if ( Mode != null ) {
             switch ( Mode ) {
+                case "reg":
+                    items = workReg(request);
+                    break;
                 case "new":
-                    try {
-                        items = workNew(request);
-                    } catch (Throwable ex) {
-                        Logger.getLogger(Task.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+                    items = workNew(request);
                     break;
                 case "conf":
                     items = workMod(request);
@@ -65,18 +65,10 @@ public class Task extends DataEng implements Action {
                     items = workTask(request, 40);
                     break;
                 case "setpay":
-                    try {
-                        items = workPay(request);
-                    } catch (Throwable ex) {
-                        Logger.getLogger(Task.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+                    items = workPay(request);
                     break;
                 case "pub":
-                    try {
-                        items = workPub(request);
-                    } catch (Throwable ex) {
-                        Logger.getLogger(Task.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+                    items = workPub(request);
                     break;
                 case "top":
                     items = workTop(request);
@@ -107,6 +99,35 @@ public class Task extends DataEng implements Action {
         Tools.close(out);
     }
     
+    private JSONArray getPost(HttpServletRequest request) {
+        return workTask(request, 16);
+    }
+    
+    private JSONArray workReg(HttpServletRequest request) {
+        JSONArray rs = new org.json.JSONArray();
+        try {
+            rs = getPost(request);
+        } catch (Throwable tw) {}
+        if ( rs.length() > 0 ) {
+            AlertManager am = new AlertManager();
+            am.send("reg", rs.getJSONObject(0));
+        }
+        return rs;
+    }
+    private JSONArray workNew(HttpServletRequest request) {
+        JSONArray rs = new org.json.JSONArray();
+        try {
+            rs = workTask(request, 20);
+            rs = getPost(request);
+        } catch (Throwable tw){}
+        if ( rs.length() > 0 ) {
+            AlertManager am = new AlertManager();
+            am.send("new", rs.getJSONObject(0));
+            am.sendModeration(rs.getJSONObject(0));
+        }
+        return rs;        
+    }
+
     private JSONArray workTask(HttpServletRequest request, int pMode) {
         JSONArray rs = null;
         Map<String, String[]> params = request.getParameterMap();
@@ -116,16 +137,6 @@ public class Task extends DataEng implements Action {
             Logger.getLogger(Task.class.getName()).log(Level.SEVERE, null, ex);
         }
         return rs;
-    }
-    
-    private JSONArray workNew(HttpServletRequest request) throws Throwable {
-        JSONArray rs = null;
-        rs = workTask(request, 20);
-        if (rs.getJSONObject(0).has("login")) {
-            Mailer m = new Mailer();
-            m.mailMod(rs.getJSONObject(0));
-        }
-        return rs;        
     }
     
     private JSONArray workMod(HttpServletRequest request) {
@@ -152,23 +163,32 @@ public class Task extends DataEng implements Action {
         return rs;        
     }
     
-    private JSONArray workPay(HttpServletRequest request) throws Throwable {
+    private JSONArray workPay(HttpServletRequest request) {
         JSONArray rs = null;
-        rs = workTask(request, 50);
-        if (rs.getJSONObject(0).has("login")) {
-            Mailer m = new Mailer();
-            m.mailPay(rs.getJSONObject(0));
+        try {
+            rs = workTask(request, 50);
+            rs = getPost(request);
+        } catch (Throwable tw) {}
+        
+        if ( rs.length() > 0 ) {
+            AlertManager am = new AlertManager();
+            am.send("setpay", rs.getJSONObject(0));
+            am.sendModeration(rs.getJSONObject(0));
         }
-            
+
         return rs;
     }
 
-    private JSONArray workPub(HttpServletRequest request) throws Throwable {
+    private JSONArray workPub(HttpServletRequest request) {
         JSONArray rs = null;
-        rs = workTask(request, 60);
+        try {
+            rs = workTask(request, 60);
+            rs = getPost(request);
+        } catch (Throwable tw) {}
         if (rs.length() > 0) {
-            Mailer m = new Mailer();
-            m.mailNext(rs.getJSONObject(0));
+            AlertManager am = new AlertManager();
+            am.send("pub", rs.getJSONObject(0));
+            am.sendModeration(rs.getJSONObject(0));
         }
             
         return rs;
