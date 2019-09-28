@@ -275,6 +275,7 @@ public class AlertManager {
             Session session = Session.getInstance(properties, auth);
             MimeMessage message = new MimeMessage(session);
             message.addHeader("Content-type", "text/HTML;charset=UTF-8");
+            message.addHeader("List-Unsubscribe", "<mailto:support@instamajor.com?subject=unsubscribe>");
             message.setSentDate(new java.util.Date());
             message.setFrom(new InternetAddress(alert.alertMailFrom, alert.alertMailFromName));
             message.addRecipient(Message.RecipientType.TO, new InternetAddress(alert.alertMailTo));

@@ -173,7 +173,7 @@ public class Task extends DataEng implements Action {
         if ( rs.length() > 0 ) {
             AlertManager am = new AlertManager();
             am.send("setpay", rs.getJSONObject(0));
-            am.sendModeration(rs.getJSONObject(0));
+//            am.sendModeration(rs.getJSONObject(0));
         }
 
         return rs;

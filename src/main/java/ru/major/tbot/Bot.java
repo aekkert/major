@@ -2,13 +2,22 @@ package ru.major.tbot;
 
 import java.io.InputStream;
 import java.sql.Blob;
+import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.sql.rowset.serial.SerialBlob;
+import org.ehcache.Cache;
+import org.ehcache.CacheManager;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.CacheManagerBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.telegrambots.ApiContextInitializer;
@@ -29,6 +38,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import ru.major.db.DataEng;
+import ru.major.util.Currency;
 import ru.major.web.AlertManager;
 
 /**
@@ -36,8 +46,10 @@ import ru.major.web.AlertManager;
  * @author alex
  */
 public final class Bot extends TelegramLongPollingCommandBot {
+//    private static final String BOT_NAME = "ekkerttestbot";
     private static final String BOT_NAME = "Главный в инстаграм";
-    private static final String BOT_TOKEN = "978242904:AAEcLWZnu1gw2IrMGepTrxuvrmGm3qeJblU"; //"961149615:AAGPGgcnUlPKWT0Ktr5mZ9WzAh_nS_0mWSs";
+//    private static final String BOT_TOKEN = "961149615:AAGPGgcnUlPKWT0Ktr5mZ9WzAh_nS_0mWSs" /*ekkerttestbot*/;
+    private static final String BOT_TOKEN = "978242904:AAEcLWZnu1gw2IrMGepTrxuvrmGm3qeJblU"/*InstaMajor_bot*/;
     private static volatile Bot instance;
     
     public static Bot getInstance() {
@@ -80,6 +92,13 @@ public final class Bot extends TelegramLongPollingCommandBot {
 
         }));
     }
+
+    protected static final CacheManager CACHE_MANAGER = CacheManagerBuilder.newCacheManagerBuilder()
+                .withCache("currencyCache",
+                    CacheConfigurationBuilder.newCacheConfigurationBuilder(Date.class, JSONObject.class,ResourcePoolsBuilder.heap(100))
+                .withLoaderWriter(new Currency())
+                .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(180)))
+                .build()).build(true);
     
     @Override
     public String getBotToken() {
@@ -401,7 +420,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
         
         message = new SendMessage();
         message.setChatId(chat_id);
-        message.setText("Пост кандидата @" + o.getString("login") + " опубликован");
+        message.setText("Пост кандидата @" + o.getString("login") + " опубликован?");
         message.setReplyMarkup(markup);
         try {
             execute(message);
@@ -442,7 +461,16 @@ public final class Bot extends TelegramLongPollingCommandBot {
             JSONArray rs = data.getData(80, new HashMap());
             stat = rs.getJSONObject(0);
         } catch (Throwable tw) {}
-        
+        try {
+            SimpleDateFormat ff = new SimpleDateFormat("dd.MM.yyyy");
+            Date dt = ff.parse(ff.format(new Date()));
+            Double curr = (Double) getJsDetails(dt).getJSONObject("Valute").getJSONObject("USD").get("Value");
+            stat.put("treasury$", Double.toString(Math.round(Double.parseDouble(stat.getString("treasury")) / curr)));
+            stat.put("storage$", Double.toString(Math.round(Double.parseDouble(stat.getString("storage")) / curr)));
+            o.put("ratepay$", Double.toString(Math.round(Double.parseDouble(o.getString("ratepay")) / curr)));
+            o.put("ratesum$", Double.toString(Math.round(Double.parseDouble(o.getString("ratesum")) / curr)));
+            o.put("nextpay$", Double.toString(Math.round(Double.parseDouble(o.getString("nextpay")) / curr)));
+        } catch (Exception e){}
         try {
             s = s.replace("{LOGIN}", o.getString("login"));
         } catch (java.lang.Throwable tw) {}
@@ -450,13 +478,31 @@ public final class Bot extends TelegramLongPollingCommandBot {
             s = s.replace("{RATESUM}", o.getString("ratesum"));
         } catch (java.lang.Throwable tw) {}
         try {
+            s = s.replace("{RATESUM$}", o.getString("ratesum$"));
+        } catch (java.lang.Throwable tw) {}
+        try {
             s = s.replace("{RATEPAY}", o.getString("ratepay"));
+        } catch (java.lang.Throwable tw) {}
+        try {
+            s = s.replace("{RATEPAY$}", o.getString("ratepay$"));
         } catch (java.lang.Throwable tw) {}
         try {
             s = s.replace("{TREASURY}", stat.getString("treasury"));
         } catch (java.lang.Throwable tw) {}
         try {
+            s = s.replace("{TREASURY$}", stat.getString("treasury$"));
+        } catch (java.lang.Throwable tw) {}
+        try {
             s = s.replace("{STORAGE}", stat.getString("storage"));
+        } catch (java.lang.Throwable tw) {}
+        try {
+            s = s.replace("{STORAGE$}", stat.getString("storage$"));
+        } catch (java.lang.Throwable tw) {}
+        try {
+            s = s.replace("{NEXTPAY}", o.getString("nextpay"));
+        } catch (java.lang.Throwable tw) {}
+        try {
+            s = s.replace("{NEXTPAY$}", o.getString("nextpay$"));
         } catch (java.lang.Throwable tw) {}
         return s;
     }
@@ -469,21 +515,21 @@ public final class Bot extends TelegramLongPollingCommandBot {
                       "🗄 Призовой фонд победителей\n" +
                       "= {STORAGE} руб.\n" +
                       "☝🏻\n" +
-                      "❓Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт 👑 пополнив коллективный рекламный бюджет ⤴️ {RATEPAY} руб.\n" +
+                      "❓Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт 👑 пополнив коллективный рекламный бюджет ⤴️ {NEXTPAY} руб.\n" +
                       "▫️\n" +
                       "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
                       "👉🏻❓ @{LOGIN} ❓👈🏻\n" +
                       "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
                       "▫️\n" +
-                      "His Majesty the King @{LOGIN} 👑 salute 👏🏻🤴❤️ his contribution to the treasury of the project amounted to {RATESUM} ₽⚡️\n" +
+                      "His Majesty the King @{LOGIN} 👑 salute 👏🏻🤴❤️ his contribution to the treasury of the project amounted to {RATESUM$} $⚡️\n" +
                       "💰\n" +
                       "📊 Collective budget for future account advertising campaigns\n" +
-                      "= {TREASURY} ₽\n" +
+                      "= {TREASURY$} $\n" +
                       "🏆\n" +
                       "🗄 Winners' prize fund\n" +
-                      "= {STORAGE} ₽\n" +
+                      "= {STORAGE$} $\n" +
                       "☝🏻\n" +
-                      "❓Do you want that money to work for you too? Head up our traffic-forming account 👑 by supplementing the collective advertising budget ⤴️ {RATEPAY} ₽\n" +
+                      "❓Do you want that money to work for you too? Head up our traffic-forming account 👑 by supplementing the collective advertising budget ⤴️ {NEXTPAY$} $\n" +
                       "▫️\n" +
                       "▫️\n" +
                       "▫️\n" +
@@ -492,7 +538,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
     }
 
     private String femaleNote() {
-        String note = "Его Величество ЦАРИЦА @{LOGIN} 👑приветствуем 👏🏻👸🏼❤️ её вклад в казну проекта составил {RATEPAY} руб.⚡️\n" +
+        String note = "Его Величество ЦАРИЦА @{LOGIN} 👑приветствуем 👏🏻👸🏼❤️ её вклад в казну проекта составил {RATESUM} руб.⚡️\n" +
                       "💰\n" +
                       "📊 Коллективный бюджет будущих рекламных кампаний аккаунта\n" +
                       "= {TREASURY} руб.\n" +
@@ -500,26 +546,31 @@ public final class Bot extends TelegramLongPollingCommandBot {
                       "🗄 Призовой фонд победителей\n" +
                       "= {STORAGE} руб.\n" +
                       "☝🏻\n" +
-                      "❓Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт 👑 пополнив коллективный рекламный бюджет ⤴️ {RATESUM} руб.\n" +
+                      "❓Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт 👑 пополнив коллективный рекламный бюджет ⤴️ {NEXTPAY} руб.\n" +
                       "▫️\n" +
                       "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
                       "👉🏻❓ @{LOGIN} ❓👈🏻\n" +
                       "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
                       "▫️\n" +
-                      "Her Majesty the Queen @{LOGIN} 👑 salute 👏🏻🤴❤️ her contribution to the treasury of the project amounted to {RATEPAY} ₽⚡️\n" +
+                      "Her Majesty the Queen @{LOGIN} 👑 salute 👏🏻🤴❤️ her contribution to the treasury of the project amounted to {RATESUM$} $⚡️\n" +
                       "💰\n" +
                       "📊 Collective budget for future account advertising campaigns\n" +
-                      "= {TREASURY} ₽\n" +
+                      "= {TREASURY$} $\n" +
                       "🏆\n" +
                       "🗄 Winners' prize fund\n" +
-                      "= {STORAGE} ₽\n" +
+                      "= {STORAGE$} $\n" +
                       "☝🏻\n" +
-                      "❓Do you want that money to work for you too? Head up our traffic-forming account 👑 by supplementing the collective advertising budget ⤴️ {RATESUM} ₽\n" +
+                      "❓Do you want that money to work for you too? Head up our traffic-forming account 👑 by supplementing the collective advertising budget ⤴️ {NEXTPAY$} $\n" +
                       "▫️\n" +
                       "▫️\n" +
                       "▫️\n" +
                       "#🇷🇺 #россия #russia #краснодар #krasnodar #instamajor #главныйвинстаграм #царьгоры #корольтрафика #trafficking #kingoftraffic #mountainking #kingofthehill";
         return note;
+    }
+    
+    public JSONObject getJsDetails(Date key){
+        final Cache<Date, JSONObject> currencyCache = CACHE_MANAGER.getCache("currencyCache", Date.class, JSONObject.class);
+        return currencyCache.get(key);
     }
 
 }

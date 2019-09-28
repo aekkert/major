@@ -256,6 +256,8 @@ public class Tools {
         File f = File.createTempFile("img", ".jpg");
         FileUtils.copyURLToFile(new URL(img), f);
         BufferedImage overlay = ImageIO.read(f);
+        f.delete();
+        /*
         BufferedImage resized = resize(overlay, 735, 735);
         // create the new image, canvas size is the max. of both image sizes
         int w = Math.max(image.getWidth(), image.getWidth());
@@ -266,8 +268,9 @@ public class Tools {
         Graphics g = combined.getGraphics();
         g.drawImage(image, 0, 0, null);
         g.drawImage(resized, 34, 34, null);
-        f.delete();
         return encodeToString(combined);
+        */
+        return encodeToString(overlay);
     }
 
     private static BufferedImage resize(BufferedImage img, int height, int width) {
