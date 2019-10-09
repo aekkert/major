@@ -1,7 +1,8 @@
 package ru.major.tbot;
 
 import java.io.InputStream;
-import java.sql.Blob;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -11,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.sql.rowset.serial.SerialBlob;
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
 import org.ehcache.config.builders.CacheConfigurationBuilder;
@@ -39,6 +39,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import ru.major.db.DataEng;
 import ru.major.util.Currency;
+import ru.major.util.Translator;
 import ru.major.web.AlertManager;
 
 /**
@@ -48,7 +49,7 @@ import ru.major.web.AlertManager;
 public final class Bot extends TelegramLongPollingCommandBot {
 //    private static final String BOT_NAME = "ekkerttestbot";
     private static final String BOT_NAME = "Главный в инстаграм";
-//    private static final String BOT_TOKEN = "961149615:AAGPGgcnUlPKWT0Ktr5mZ9WzAh_nS_0mWSs" /*ekkerttestbot*/;
+//    private static final String BOT_TOKEN = "929421719:AAGBsK8n6A2GqSOMd9Gz38lFvx3BWhqXP2o" /*ekkerttestbot*/;
     private static final String BOT_TOKEN = "978242904:AAEcLWZnu1gw2IrMGepTrxuvrmGm3qeJblU"/*InstaMajor_bot*/;
     private static volatile Bot instance;
     
@@ -78,6 +79,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
         
         
         register(new StartCommand());
+        register(new StatCommand());
         
         registerDefaultAction(((absSender, message) -> {
 
@@ -100,6 +102,13 @@ public final class Bot extends TelegramLongPollingCommandBot {
                 .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(180)))
                 .build()).build(true);
     
+    protected static final CacheManager CACHE_MANAGER1 = CacheManagerBuilder.newCacheManagerBuilder()
+                .withCache("translateCache",
+                    CacheConfigurationBuilder.newCacheConfigurationBuilder(JSONObject.class, String.class, ResourcePoolsBuilder.heap(100))
+                .withLoaderWriter(new Translator())
+                .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(180)))
+                .build()).build(true);
+    
     @Override
     public String getBotToken() {
         return BOT_TOKEN;
@@ -109,7 +118,10 @@ public final class Bot extends TelegramLongPollingCommandBot {
     public void processNonCommandUpdate(Update update) {
         if (update.hasCallbackQuery()) {
             String res = update.getCallbackQuery().getData();
-            String postID = res.substring(res.indexOf("#", 0) + 1, res.indexOf("#", 1));
+            String postID = null;
+            try {
+                postID = res.substring(res.indexOf("#", 0) + 1, res.indexOf("#", 1));
+            } catch (Exception e) {}
             if ( res.contains("ALLOW") ) {
                 try {
                     DataEng data = new DataEng();
@@ -213,6 +225,39 @@ public final class Bot extends TelegramLongPollingCommandBot {
                         Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
                     }
                 } catch (Throwable tw) {}
+            } else if ( res.contains("DELAY") ) {
+                ForceReplyKeyboard key = new ForceReplyKeyboard();
+                SendMessage message = new SendMessage().setChatId(update.getCallbackQuery().getMessage().getChatId())
+                    .setReplyToMessageId(update.getCallbackQuery().getMessage().getMessageId())
+                    .setReplyMarkup(key)
+                    .setText("На сколько часов отложить публикацию.")
+                    .setParseMode("HTML");
+                try {
+                    execute(message);
+                } catch (TelegramApiException e) {
+                    Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
+                }                
+            } else if ( res.contains("BACKSTAT") ) {
+                statMenu(update.getCallbackQuery().getMessage().getChatId());
+            } else {
+                ForceReplyKeyboard key = new ForceReplyKeyboard();
+                SendMessage message = new SendMessage().setChatId(update.getCallbackQuery().getMessage().getChatId())
+                    .setReplyToMessageId(update.getCallbackQuery().getMessage().getMessageId())
+                    .setReplyMarkup(key);
+
+                InlineKeyboardMarkup markup = update.getCallbackQuery().getMessage().getReplyMarkup();
+                for (List<InlineKeyboardButton> buttons : markup.getKeyboard()) {
+                    for (InlineKeyboardButton button : buttons) {
+                        if (res.equals(button.getCallbackData())) {
+                            message.setText(button.getText());
+                        }
+                    }
+                }
+                try {
+                    execute(message);
+                } catch (TelegramApiException e) {
+                    Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
+                }                
             }
         } else if (update.hasMessage()) {
             Message msg = update.getMessage();
@@ -231,7 +276,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
                     if ( res ) {
                         replyToUser(msg.getChatId(), "Поздравляю " + usr.getUserName() + ". Нам удалось подвердить Ваши полномочия.");
                     } else {
-                        replyToUser(msg.getChatId(), "Извините " + usr.getUserName() + ". Нам не удалось подвердить Ваши полномочия. Если это техническая ошибка свяжитесь с автором проекта 1@instamajor.com");                        
+                        replyToUser(msg.getChatId(), "Извините " + usr.getUserName() + ". Нам не удалось подвердить Ваши полномочия. Если это техническая ошибка свяжитесь с автором проекта 1@instamajor.com");
                     }
                 } catch (Throwable ex) {
                     Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
@@ -240,25 +285,54 @@ public final class Bot extends TelegramLongPollingCommandBot {
                 try {
                     String res = replMsg.getText();
                     int start = res.indexOf("#", 0) + 1;
-                    int end = res.indexOf("#", start);
-                    String postID = res.substring(start, end);
-                    DataEng data = new DataEng();
-                    Map<String, String[]> params = new HashMap();
-                    params.put("post", new String[]{postID});
-                    JSONArray rs = data.getData(30, params);
-                    rs = data.getData(16, params);
-                    rs.getJSONObject(0).put("modenotes", msg.getText());
-                    AlertManager am = new AlertManager();
-                    am.send("notes", rs.getJSONObject(0));
-                    SendMessage message = new SendMessage().setChatId(update.getMessage().getChatId())
-                        .setText("Ваши замечания отправлены кандидату на email. Спасибо, модерация поста #" + postID + " завершена.");
-                    try {
-                        execute(message);
-                    } catch (TelegramApiException e) {
-                        Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
+                    if ( start > 0 ) {
+                        int end = res.indexOf("#", start);
+                        String postID = res.substring(start, end);
+                        DataEng data = new DataEng();
+                        Map<String, String[]> params = new HashMap();
+                        params.put("post", new String[]{postID});
+                        JSONArray rs = data.getData(30, params);
+                        rs = data.getData(16, params);
+                        rs.getJSONObject(0).put("modenotes", msg.getText());
+                        AlertManager am = new AlertManager();
+                        am.send("notes", rs.getJSONObject(0));
+                        SendMessage message = new SendMessage().setChatId(update.getMessage().getChatId())
+                            .setText("Ваши замечания отправлены кандидату на email. Спасибо, модерация поста #" + postID + " завершена.");
+                        try {
+                            execute(message);
+                        } catch (TelegramApiException e) {
+                            Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
+                        }
+                    } else {
+                        DataEng data = new DataEng();
+                        Map<String, String[]> params = new HashMap();
+                        params.put("value", new String[]{msg.getText()});
+                        params.put("name", new String[]{replMsg.getText()});
+                        JSONArray rs = data.getData(1004, params);
+                        String result = rs.getJSONObject(0).getString("result");
+                        SendMessage message = new SendMessage().setChatId(update.getMessage().getChatId())
+                                .setText("Success".equals(result) ? "Данные \"" + replMsg.getText() + "\" успешно сохранены" : "Ошибка сохренения \"" + replMsg.getText() + "\"");
+                        InlineKeyboardMarkup                markup      = new InlineKeyboardMarkup();
+                        InlineKeyboardButton                button      = null;
+                        List<InlineKeyboardButton>          buttonsRow  = null;
+                        List<List<InlineKeyboardButton>>    rowList     = new ArrayList<>();
+                        buttonsRow = new ArrayList<>();
+                        button = new InlineKeyboardButton();
+                        button.setText("<-- Назад в меню статистики");
+                        button.setCallbackData("BACKSTAT");
+                        buttonsRow.add(button);
+                        rowList.add(buttonsRow);
+                        markup.setKeyboard(rowList);
+                        message.setReplyMarkup(markup);
+                        try {
+                            execute(message);
+                        } catch (TelegramApiException e) {
+                            Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
+                        }                        
                     }
+                    
                 } catch (Throwable tw) {}
-            }
+             }
         }
     }
 
@@ -274,7 +348,43 @@ public final class Bot extends TelegramLongPollingCommandBot {
         }
     }
     
-    public void sendModeData(Long chat_id, JSONObject o, String image) {
+    public void statMenu(Long chat_id) {
+        InlineKeyboardMarkup                markup      = new InlineKeyboardMarkup();
+        InlineKeyboardButton                button      = null;
+        List<InlineKeyboardButton>          buttonsRow  = null;
+        List<List<InlineKeyboardButton>>    rowList     = new ArrayList<>();
+
+        String msg = "Ввод статистических данных трафикообразующего аккаунта @insta_major";
+        try {
+            DataEng data = new DataEng();
+            JSONArray rs = data.getData(1003, new HashMap());
+            if ( rs.length() > 0 ) {
+                for ( int i = 0; i < rs.length(); i++ ) {
+                    buttonsRow = new ArrayList<>();
+                    button = new InlineKeyboardButton();
+                    button.setText(rs.getJSONObject(i).getString("markname"));
+                    button.setCallbackData(rs.getJSONObject(i).getString("markcode"));
+                    buttonsRow.add(button);
+                    rowList.add(buttonsRow);
+                    msg = msg + "\n " + rs.getJSONObject(i).getString("markname") + ": " + rs.getJSONObject(i).getString("regvalue");
+                 }
+            }
+            markup.setKeyboard(rowList);
+        } catch (Throwable tw) {
+        }
+
+        SendMessage message = new SendMessage();
+        message.setChatId(chat_id);
+        message.setText(msg);
+        message.setReplyMarkup(markup);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendModeData(Long chat_id, JSONObject o, InputStream image) {
         String                              res         = "";
         InlineKeyboardMarkup                markup      = new InlineKeyboardMarkup();
         InlineKeyboardButton                button      = null;
@@ -284,7 +394,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
         buttonsRow = new ArrayList<>();
         button = new InlineKeyboardButton();
         button.setText("Перейти в профиль кандидата @" + o.getString("login"));
-        button.setUrl("https://instagram.com/igor.lix");
+        button.setUrl("https://instagram.com/" + o.getString("login"));
         buttonsRow.add(button);
         rowList.add(buttonsRow);
         
@@ -320,29 +430,12 @@ public final class Bot extends TelegramLongPollingCommandBot {
         }
         SendPhoto photo = new SendPhoto();
         photo.setChatId(chat_id);
-        try {
-            Blob b = null;
-            b = new SerialBlob(java.util.Base64.getDecoder().decode(image));
-            InputStream is = b.getBinaryStream();
-            photo.setPhoto("image.png", is);
-        } catch (Throwable tw){
-            res = res + ";" + tw.getMessage();
-        }
+        photo.setPhoto("image.png", image);
         try {
             execute(photo);
         } catch (TelegramApiException e) {
             res = res + ";" + e.getMessage();
         }
-
-        message = new SendMessage();
-        message.setChatId(chat_id);
-        message.setText(o.getString("post_content"));
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            res = res + ";" + e.getMessage();
-        }
-        
         message.setChatId(chat_id);
         message.setText("Меню модерации:");
         message.setReplyMarkup(markup);
@@ -359,7 +452,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
         putEvent(o);
     }
     
-    public void sendPostData(Long chat_id, JSONObject o, String image) {
+    public void sendPostData(Long chat_id, JSONObject o, InputStream image) {
         String                              res         = "";
         InlineKeyboardMarkup                markup      = new InlineKeyboardMarkup();
         InlineKeyboardButton                button      = null;
@@ -377,29 +470,12 @@ public final class Bot extends TelegramLongPollingCommandBot {
         
         SendPhoto photo = new SendPhoto();
         photo.setChatId(chat_id);
-        try {
-            Blob b = null;
-            b = new SerialBlob(java.util.Base64.getDecoder().decode(image));
-            InputStream is = b.getBinaryStream();
-            photo.setPhoto("image.png", is);
-        } catch (Throwable tw){
-            res = res + ";" + tw.getMessage();
-        }
+        photo.setPhoto("image.png", image);
         try {
             execute(photo);
         } catch (TelegramApiException e) {
             res = res + ";" + e.getMessage();
         }
-        
-        message = new SendMessage();
-        message.setChatId(chat_id);
-        message.setText(o.getString("post_content"));
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            res = res + ";" + e.getMessage();
-        }
-
         message = new SendMessage();
         message.setChatId(chat_id);
         message.setText(getNote(o));
@@ -413,6 +489,12 @@ public final class Bot extends TelegramLongPollingCommandBot {
         button = new InlineKeyboardButton();
         button.setText("ДА");
         button.setCallbackData("#" + o.getString("postid") + "#PUBLISH");
+        buttonsRow.add(button);
+        rowList.add(buttonsRow);
+
+        button = new InlineKeyboardButton();
+        button.setText("Отложить публикацию");
+        button.setCallbackData("#" + o.getString("postid") + "#DELAY");
         buttonsRow.add(button);
         rowList.add(buttonsRow);
 
@@ -434,7 +516,17 @@ public final class Bot extends TelegramLongPollingCommandBot {
         o.put("evt", "manager");
         putEvent(o);
     }
-
+    
+    public void sendRecallData(Long chat_id, JSONObject o) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chat_id);
+        message.setText(getNote(o));
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+        }
+    }
+    
     private void putEvent(JSONObject o) {
         Map<String, String[]> params = new HashMap();
         for (String key : o.keySet()) {
@@ -458,19 +550,22 @@ public final class Bot extends TelegramLongPollingCommandBot {
         JSONObject stat = new org.json.JSONObject();
         try {
             DataEng data = new DataEng();
-            JSONArray rs = data.getData(80, new HashMap());
+            Map<String, String[]> p = new HashMap();
+            p.put("regdt", new String[]{o.getString("postdate")});  /// TODO. Delete
+            JSONArray rs = data.getData(80, p);
             stat = rs.getJSONObject(0);
         } catch (Throwable tw) {}
         try {
             SimpleDateFormat ff = new SimpleDateFormat("dd.MM.yyyy");
             Date dt = ff.parse(ff.format(new Date()));
             Double curr = (Double) getJsDetails(dt).getJSONObject("Valute").getJSONObject("USD").get("Value");
-            stat.put("treasury$", Double.toString(Math.round(Double.parseDouble(stat.getString("treasury")) / curr)));
-            stat.put("storage$", Double.toString(Math.round(Double.parseDouble(stat.getString("storage")) / curr)));
-            o.put("ratepay$", Double.toString(Math.round(Double.parseDouble(o.getString("ratepay")) / curr)));
-            o.put("ratesum$", Double.toString(Math.round(Double.parseDouble(o.getString("ratesum")) / curr)));
-            o.put("nextpay$", Double.toString(Math.round(Double.parseDouble(o.getString("nextpay")) / curr)));
+            stat.put("treasury$", Double.toString(round(Double.parseDouble(stat.getString("treasury")) / curr, 2)));
+            stat.put("storage$", Double.toString(round(Double.parseDouble(stat.getString("storage")) / curr, 2)));
+            o.put("ratepay$", Double.toString(round(Double.parseDouble(o.getString("ratepay")) / curr, 2)));
+            o.put("ratesum$", Double.toString(round(Double.parseDouble(o.getString("ratesum")) / curr, 2)));
+            o.put("nextpay$", Double.toString(round(Double.parseDouble(o.getString("nextpay")) / curr, 2)));
         } catch (Exception e){}
+        String translatedTown = getTranslate(o.getString("user_town"), "ru", "en");
         try {
             s = s.replace("{LOGIN}", o.getString("login"));
         } catch (java.lang.Throwable tw) {}
@@ -504,73 +599,147 @@ public final class Bot extends TelegramLongPollingCommandBot {
         try {
             s = s.replace("{NEXTPAY$}", o.getString("nextpay$"));
         } catch (java.lang.Throwable tw) {}
+        try {
+            s = s.replace("{TOWN}", o.getString("user_town"));
+        } catch (java.lang.Throwable tw) {}
+        try {
+            s = s.replace("{TRANSTOWN}", translatedTown);
+        } catch (java.lang.Throwable tw) {}
         return s;
     }
+    private static double round(double value, int places) {
+        if (places < 0) throw new IllegalArgumentException();
+
+        BigDecimal bd = new BigDecimal(Double.toString(value));
+        bd = bd.setScale(places, RoundingMode.HALF_UP);
+        return bd.doubleValue();
+    }
     private String maleNote() {
-        String note = "Его Величество ЦАРЬ @{LOGIN} 👑приветствуем 👏🏻🤴❤️ его вклад в казну проекта составил {RATESUM} руб.⚡️\n" +
-                      "💰\n" +
-                      "📊 Коллективный бюджет будущих рекламных кампаний аккаунта\n" +
-                      "= {TREASURY} руб.\n" +
-                      "🏆\n" +
-                      "🗄 Призовой фонд победителей\n" +
-                      "= {STORAGE} руб.\n" +
-                      "☝🏻\n" +
-                      "❓Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт 👑 пополнив коллективный рекламный бюджет ⤴️ {NEXTPAY} руб.\n" +
-                      "▫️\n" +
-                      "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
-                      "👉🏻❓ @{LOGIN} ❓👈🏻\n" +
-                      "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
-                      "▫️\n" +
-                      "His Majesty the King @{LOGIN} 👑 salute 👏🏻🤴❤️ his contribution to the treasury of the project amounted to {RATESUM$} $⚡️\n" +
-                      "💰\n" +
-                      "📊 Collective budget for future account advertising campaigns\n" +
-                      "= {TREASURY$} $\n" +
-                      "🏆\n" +
-                      "🗄 Winners' prize fund\n" +
-                      "= {STORAGE$} $\n" +
-                      "☝🏻\n" +
-                      "❓Do you want that money to work for you too? Head up our traffic-forming account 👑 by supplementing the collective advertising budget ⤴️ {NEXTPAY$} $\n" +
-                      "▫️\n" +
-                      "▫️\n" +
-                      "▫️\n" +
-                      "#🇷🇺 #россия #russia #краснодар #krasnodar #instamajor #главныйвинстаграм #царьгоры #корольтрафика #trafficking #kingoftraffic #mountainking #kingofthehill";
+        String note = "👑 Его Величество ЦАРЬ @{LOGIN} 🤴 приветствуем 👏❤️ его вклад в Казну проекта составил\n" +
+                      "= {RATESUM} руб. 💳\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "🌐 КОЛЛЕКТИВНЫЙ БЮДЖЕТ БУДУЩИХ РЕКЛАМНЫХ КАМПАНИЙ АККАУНТА (Казна проекта)\n" +
+                      "= {TREASURY} руб. 💰\n" +
+                      "⠀\n" +
+                      "🏆 Призовой фонд победителей\n" +
+                      "= {STORAGE} руб. 🗄\n" +
+                      "⠀\n" +
+                      "⠀ ⠀ ⠀ ⠀ ⠀ ⠀ ⠀ ⠀☝️\n" +
+                      "Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт, пополнив коллективный рекламный бюджет\n" +
+                      "🔝 {NEXTPAY} руб.\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "👉❓ @{LOGIN} ❓👈\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "👑 His Majesty the King @{LOGIN} 🤴 salute 👏❤️ his contribution to the treasury of the project amounted to\n" +
+                      "= {RATESUM$} $ 💳\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "🌐 COLLECTIVE BUDGET FOR FUTURE ACCOUNT ADVERTISING CAMPAIGNS (treasury of the project)\n" +
+                      "= {TREASURY$} $ 💰\n" +
+                      "⠀\n" +
+                      "🏆 Winners' prize fund\n" +
+                      "= {STORAGE$} $ 🗄\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀ ⠀ ⠀ ⠀ ⠀ ⠀ ⠀☝️\n" +
+                      "Do you want that money to work for you too?\n" +
+                      "Head up our traffic-forming account by supplementing the collective advertising budget\n" +
+                      "🔝 {NEXTPAY$} $\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "👉❓ @{LOGIN} ❓👈\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "➖➖➖➖➖➖➖➖➖➖➖\n" +
+                      "#🇷🇺 #россия #russia #{TOWN} #{TRANSTOWN} #instamajor #главныйвинстаграм #царьгоры #корольтрафика #trafficking #kingoftraffic #mountainking #kingofthehill";
         return note;
     }
 
     private String femaleNote() {
-        String note = "Его Величество ЦАРИЦА @{LOGIN} 👑приветствуем 👏🏻👸🏼❤️ её вклад в казну проекта составил {RATESUM} руб.⚡️\n" +
-                      "💰\n" +
-                      "📊 Коллективный бюджет будущих рекламных кампаний аккаунта\n" +
-                      "= {TREASURY} руб.\n" +
-                      "🏆\n" +
-                      "🗄 Призовой фонд победителей\n" +
-                      "= {STORAGE} руб.\n" +
-                      "☝🏻\n" +
-                      "❓Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт 👑 пополнив коллективный рекламный бюджет ⤴️ {NEXTPAY} руб.\n" +
-                      "▫️\n" +
-                      "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
-                      "👉🏻❓ @{LOGIN} ❓👈🏻\n" +
-                      "👉🏻👑 @{LOGIN} 👑👈🏻\n" +
-                      "▫️\n" +
-                      "Her Majesty the Queen @{LOGIN} 👑 salute 👏🏻🤴❤️ her contribution to the treasury of the project amounted to {RATESUM$} $⚡️\n" +
-                      "💰\n" +
-                      "📊 Collective budget for future account advertising campaigns\n" +
-                      "= {TREASURY$} $\n" +
-                      "🏆\n" +
-                      "🗄 Winners' prize fund\n" +
-                      "= {STORAGE$} $\n" +
-                      "☝🏻\n" +
-                      "❓Do you want that money to work for you too? Head up our traffic-forming account 👑 by supplementing the collective advertising budget ⤴️ {NEXTPAY$} $\n" +
-                      "▫️\n" +
-                      "▫️\n" +
-                      "▫️\n" +
-                      "#🇷🇺 #россия #russia #краснодар #krasnodar #instamajor #главныйвинстаграм #царьгоры #корольтрафика #trafficking #kingoftraffic #mountainking #kingofthehill";
+        String note = "👑 Её Величество ЦАРИЦА @{LOGIN} 👸 приветствуем 👏❤️ её вклад в Казну проекта составил\n" +
+                      "= {RATESUM} руб. 💳\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "🌐 КОЛЛЕКТИВНЫЙ БЮДЖЕТ БУДУЩИХ РЕКЛАМНЫХ КАМПАНИЙ АККАУНТА (Казна проекта)\n" +
+                      "= {TREASURY} руб. 💰\n" +
+                      "⠀\n" +
+                      "🏆 Призовой фонд победителей\n" +
+                      "= {STORAGE} руб. 🗄\n" +
+                      "⠀\n" +
+                      "⠀ ⠀ ⠀ ⠀ ⠀ ⠀ ⠀ ⠀☝️\n" +
+                      "Хотите, чтобы эти деньги работали и для вас? Возглавьте наш трафикообразующий аккаунт, пополнив коллективный рекламный бюджет\n" +
+                      "🔝 {NEXTPAY} руб.\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "👉❓ @{LOGIN} ❓👈\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "👑 Her Majesty the Queen @{LOGIN} 👸 salute 👏🏻❤️ her contribution to the treasury of the project amounted to\n" +
+                      "= {RATESUM$} $ 💳\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "🌐 COLLECTIVE BUDGET FOR FUTURE ACCOUNT ADVERTISING CAMPAIGNS (treasury of the project)\n" +
+                      "= {TREASURY$} $ 💰\n" +
+                      "⠀\n" +
+                      "🏆 Winners' prize fund\n" +
+                      "= {STORAGE$} $ 🗄\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀ ⠀ ⠀ ⠀ ⠀ ⠀ ⠀☝️\n" +
+                      "Do you want that money to work for you too?\n" +
+                      "Head up our traffic-forming account by supplementing the collective advertising budget\n" +
+                      "🔝 {NEXTPAY$} $\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "👉❓ @{LOGIN} ❓👈\n" +
+                      "👉👑 @{LOGIN} 👑👈\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "⠀\n" +
+                      "➖➖➖➖➖➖➖➖➖➖➖\n" +
+                      "#🇷🇺 #россия #russia #{TOWN} #{TRANSTOWN} #instamajor #главныйвинстаграм #царьгоры #корольтрафика #trafficking #kingoftraffic #mountainking #kingofthehill";
         return note;
     }
     
     public JSONObject getJsDetails(Date key){
         final Cache<Date, JSONObject> currencyCache = CACHE_MANAGER.getCache("currencyCache", Date.class, JSONObject.class);
         return currencyCache.get(key);
+    }
+
+    public String getTranslate(String text, String src, String trg){
+        final Cache<JSONObject, String> translateCache = CACHE_MANAGER1.getCache("translateCache", JSONObject.class, String.class);
+        JSONObject key = new org.json.JSONObject();
+        key.put("text", text);
+        key.put("src", src);
+        key.put("trg", trg);
+        return translateCache.get(key);
     }
 
 }

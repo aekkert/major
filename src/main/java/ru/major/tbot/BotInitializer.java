@@ -5,7 +5,7 @@
  */
 package ru.major.tbot;
 
-import java.awt.image.BufferedImage;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -15,7 +15,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.imageio.ImageIO;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import org.json.JSONArray;
@@ -53,9 +52,9 @@ public class BotInitializer implements ServletContextListener {
                             rs = data.getData(16, params);
                             JSONArray mngrs = data.getData(14, params);
                             for (int i = 0; i < mngrs.length(); i++) {
-                                BufferedImage image = ImageIO.read(getClass().getClassLoader().getResourceAsStream("border.jpg"));
-                                String imageStr = Tools.makeImage(image, rs.getJSONObject(0).getString("imguri"));
-                                b.sendPostData(Long.parseLong(mngrs.getJSONObject(i).getString("chatid")), rs.getJSONObject(0), imageStr);
+                                InputStream is = Tools.makeImage(rs.getJSONObject(0).getString("imguri"));
+                                b.sendPostData(Long.parseLong(mngrs.getJSONObject(i).getString("chatid")), rs.getJSONObject(0), is);
+                                is.close();
                             }
                         }
                     }

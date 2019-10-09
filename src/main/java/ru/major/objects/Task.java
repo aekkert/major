@@ -17,12 +17,14 @@ import ru.major.web.Mailer;
 import ru.major.web.SessionHandler;
 import java.net.*;
 import java.time.Duration;
+import java.util.HashMap;
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
 import org.ehcache.config.builders.CacheConfigurationBuilder;
 import org.ehcache.config.builders.CacheManagerBuilder;
 import org.ehcache.config.builders.ExpiryPolicyBuilder;
 import org.ehcache.config.builders.ResourcePoolsBuilder;
+import ru.major.tbot.Bot;
 import ru.major.util.NewCache;
 import ru.major.web.AlertManager;
 /**
@@ -74,7 +76,7 @@ public class Task extends DataEng implements Action {
                     items = workTop(request);
                     break;
                 case "stat":
-                    items = workTask(request, 80);
+                    items = workStat(request);
                     break;
                 case "queue":
                     items = workTask(request, 90);
@@ -84,6 +86,15 @@ public class Task extends DataEng implements Action {
                     break;                    
                 case "post":
                     items = workTask(request, 100);
+                    break;
+                case "resetpass":
+                    items = workReset(request);
+                    break;
+                case "recall":
+                    items = workRecall(request);
+                    break;
+                case "tab":
+                    items = workTask(request, 110);
                     break;
             }
         }
@@ -163,6 +174,17 @@ public class Task extends DataEng implements Action {
         return rs;        
     }
     
+    private JSONArray workStat(HttpServletRequest request) {
+        JSONArray rs = new org.json.JSONArray();
+        try {
+            rs = workTask(request, 80);
+            if ( rs.length() > 0 ) {
+                JSONArray inst = workTask(request, 1003);
+                rs.getJSONObject(0).put("insta", inst);
+            }
+        } catch (Throwable tw){}
+        return rs;
+    }
     private JSONArray workPay(HttpServletRequest request) {
         JSONArray rs = null;
         try {
@@ -193,7 +215,23 @@ public class Task extends DataEng implements Action {
             
         return rs;
     }
-
+    
+    private JSONArray workReset(HttpServletRequest request) {
+        JSONArray rs = new org.json.JSONArray();
+        JSONObject o = new org.json.JSONObject();
+        for (Map.Entry entry : request.getParameterMap().entrySet()) {
+            String key = (String) entry.getKey();
+            String[] v = (String [])entry.getValue();
+            for (int i = 0, n = v.length; i < n; i++) {
+                o.put(key, v[i]);
+            }
+        }
+        AlertManager am = new AlertManager();
+        am.send("resetpass", o);
+        rs.put(o);
+        return rs;
+    }
+    
     private JSONArray workInsta(HttpServletRequest request) throws MalformedURLException, IOException {
         JSONArray  rs = new org.json.JSONArray();
         String     user = request.getParameter("u");
@@ -209,5 +247,38 @@ public class Task extends DataEng implements Action {
         final Cache<String, JSONObject> jsCache = CACHE_MANAGER.getCache("jsCache", String.class, JSONObject.class);
         return jsCache.get(key);
     }
-
+    
+    private JSONArray workRecall(HttpServletRequest request) {
+        JSONArray rs  = new org.json.JSONArray();
+        JSONArray res = new org.json.JSONArray();
+        Map<String, String[]> params = new HashMap();
+        try {
+            rs = workTask(request, 1005);
+            if (rs.length() > 0) {
+                JSONArray r = getData(1007, params);
+                for (int i = 0; i < rs.length(); i++) {
+                    params.clear();
+                    params.put("id", new String[]{rs.getJSONObject(i).getString("id")});
+                    params.put("postid", new String[]{rs.getJSONObject(i).getString("postid")});
+                    params.put("regdt", new String[]{rs.getJSONObject(i).getString("regdt")});
+                    params.put("opersum", new String[]{rs.getJSONObject(i).getString("opersum")});
+                    params.put("dkflag", new String[]{rs.getJSONObject(i).getString("dkflag")});
+                    params.put("note", new String[]{rs.getJSONObject(i).getString("note")});
+                    params.put("linkid", new String[]{rs.getJSONObject(i).getString("linkid")});
+                    r = getData(1006, params);
+                    params.clear();
+                    params.put("post", new String[]{rs.getJSONObject(i).getString("postid")});
+                    r = getData(16, params);
+                    Integer p = Integer.parseInt(r.getJSONObject(0).getString("ratesum")) + 1;
+                    r.getJSONObject(0).put("nextpay", p.toString());
+                    Bot b = Bot.getInstance();
+                    b.sendRecallData(new Long(222217595), r.getJSONObject(0));
+                    res.put(r);
+                }
+            }
+        } catch (Throwable tw) {
+            
+        }
+        return res;
+    }
 }

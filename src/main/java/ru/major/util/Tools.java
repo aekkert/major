@@ -1,20 +1,20 @@
 package ru.major.util;
 
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.UUID;
-import javax.imageio.ImageIO;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import org.apache.commons.io.FileUtils;
 
 /**
@@ -252,41 +252,38 @@ public class Tools {
         return uuid.getMostSignificantBits() & Long.MAX_VALUE;
     }
     
-    public static final String makeImage(BufferedImage image, String img) throws IOException {
-        File f = File.createTempFile("img", ".jpg");
-        FileUtils.copyURLToFile(new URL(img), f);
-        BufferedImage overlay = ImageIO.read(f);
+    public static final InputStream makeImage(String img) throws IOException {
+        String uri = img;
+        if ( !img.contains("https") )
+            uri = img.replace("http", "https");
+        String fExt = img.substring( img.lastIndexOf(".") + 1 );
+        File f = File.createTempFile("img", "." + fExt);
+        
+        
+        TrustManager[] trustAllCerts = new TrustManager[]{
+            new X509TrustManager() {
+                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                    return null;
+                }
+                public void checkClientTrusted(
+                    java.security.cert.X509Certificate[] certs, String authType) {
+                }
+                public void checkServerTrusted(
+                    java.security.cert.X509Certificate[] certs, String authType) {
+                }
+            }
+        };
+        
+        try {
+            SSLContext sc = SSLContext.getInstance("SSL");
+            sc.init(null, trustAllCerts, new java.security.SecureRandom());
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+        } catch (Exception e) {
+           e.printStackTrace();
+        }
+        FileUtils.copyURLToFile(new URL(uri), f);
+        InputStream is = (InputStream)new FileInputStream(f);
         f.delete();
-        /*
-        BufferedImage resized = resize(overlay, 735, 735);
-        // create the new image, canvas size is the max. of both image sizes
-        int w = Math.max(image.getWidth(), image.getWidth());
-        int h = Math.max(image.getHeight(), image.getHeight());
-        BufferedImage combined = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-
-        // paint both images, preserving the alpha channels
-        Graphics g = combined.getGraphics();
-        g.drawImage(image, 0, 0, null);
-        g.drawImage(resized, 34, 34, null);
-        return encodeToString(combined);
-        */
-        return encodeToString(overlay);
-    }
-
-    private static BufferedImage resize(BufferedImage img, int height, int width) {
-        Image tmp = img.getScaledInstance(width, height, Image.SCALE_SMOOTH);
-        BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = resized.createGraphics();
-        g2d.drawImage(tmp, 0, 0, null);
-        g2d.dispose();
-        return resized;
-    }
-    
-    public static String encodeToString(BufferedImage image) throws IOException {
-        String imageString = null;
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", bos);
-        imageString = new String(java.util.Base64.getEncoder().encode(bos.toByteArray()));
-        return imageString;
+        return is;
     }
 }

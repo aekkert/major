@@ -5,7 +5,7 @@
  */
 package ru.major.web;
 
-import java.awt.image.BufferedImage;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -13,7 +13,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.imageio.ImageIO;
 import javax.mail.Authenticator;
 import javax.mail.BodyPart;
 import javax.mail.Message;
@@ -25,6 +24,7 @@ import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
+import org.apache.commons.io.IOUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import ru.major.db.DataEng;
@@ -171,6 +171,14 @@ public class AlertManager {
                 a.alertMailPwd = c.getSett("mailPwd");
                 a.alertMailTmpl = c.getSett("Alert9");
                 break;
+            case "resetpass":
+                a.alertMailFrom = c.getSett("mailSupport");
+                a.alertMailSubj = "Восстановление пароля";
+                a.alertMailSmtp = c.getSett("mailSmtp");
+                a.alertMailTo = o.getString("user_mail");
+                a.alertMailPwd = c.getSett("mailPwd");
+                a.alertMailTmpl = c.getSett("AlertResetPass");
+                break;
         }
         a.alertMailFromName = "Главный в интаграм";
         try {
@@ -200,6 +208,12 @@ public class AlertManager {
         try {
             a.alertMailTmpl = a.alertMailTmpl.replace("{LOGIN}", o.getString("login"));
         } catch (java.lang.Throwable tw) {}
+        try {
+            a.alertMailTmpl = a.alertMailTmpl.replace("{TITLE}", o.getString("title"));
+        } catch (java.lang.Throwable tw) {}
+        try {
+            a.alertMailTmpl = a.alertMailTmpl.replace("{TEXT}", o.getString("text"));
+        } catch (java.lang.Throwable tw) {}
         res = sendMail(a);
         o.put("result", res);
         o.put("evt", what);
@@ -216,8 +230,12 @@ public class AlertManager {
         }
         if ( o.length() > 0 ) {
             Cache c = Cache.getInstance();
+            InputStream is = null;
             for (int j = 0 ; j < rs.length(); j++) {
                 Alert a = new Alert();
+                try {
+                    is = Tools.makeImage(o.getString("imguri"));
+                } catch (Throwable tw){}
                 a.alertMailTmpl = c.getSett("AlertModeration");
                 try {
                     a.alertMailTmpl = a.alertMailTmpl.replace("{LOGO}", c.getSett("logo"));
@@ -229,8 +247,7 @@ public class AlertManager {
                     a.alertMailTmpl = a.alertMailTmpl.replace("{POSTURI}", o.getString("postid"));
                 } catch (java.lang.Throwable tw) {}
                 try {
-                    BufferedImage image = ImageIO.read(getClass().getClassLoader().getResourceAsStream("border.jpg"));
-                    a.alertMailImg = Tools.makeImage(image, o.getString("imguri"));
+                    a.alertMailImg = java.util.Base64.getEncoder().encodeToString(IOUtils.toByteArray(is));
                     a.alertMailTmpl = a.alertMailTmpl.replace("{POSTIMG}", a.alertMailImg);
                 } catch (java.lang.Throwable tw) {}
                 try {
@@ -247,14 +264,21 @@ public class AlertManager {
                     a.alertMailPwd = c.getSett("mailPwd");
 
                     for (int i = 0 ; i < rs.length(); i++) {
-                        a.alertMailTo = rs.getJSONObject(0).getString("email");
-                        String res = sendMail(a);
-                        o.put("user_email", a.alertMailTo);
-                        o.put("result", res);
-                        o.put("evt", "moderation");
-                        putEvent(o);
-                        Bot b = Bot.getInstance();
-                        b.sendModeData(Long.parseLong(rs.getJSONObject(0).getString("chatid")), o, a.alertMailImg);
+                        if ( rs.getJSONObject(i).has("email") ) {
+                            a.alertMailTo = rs.getJSONObject(i).getString("email");
+                            String res = sendMail(a);
+                            o.put("user_email", a.alertMailTo);
+                            o.put("result", res);
+                            o.put("evt", "moderation");
+                            putEvent(o);
+                        }
+                        if ( rs.getJSONObject(0).has("chatid") ) {
+                            Bot b = Bot.getInstance();
+                            try {
+                                is = Tools.makeImage(o.getString("imguri"));
+                            } catch (Exception e) {}
+                            b.sendModeData(Long.parseLong(rs.getJSONObject(0).getString("chatid")), o, is);
+                        }
                     }
                 }
             }

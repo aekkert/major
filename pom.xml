@@ -4,7 +4,7 @@
 
     <groupId>ru.yug</groupId>
     <artifactId>major</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.2-SNAPSHOT</version>
     <packaging>war</packaging>
 
     <name>major</name>
@@ -48,6 +48,11 @@
         <dependency>
             <groupId>javax.mail</groupId>
             <artifactId>mail</artifactId>
+            <version>LATEST</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.cloud</groupId>
+            <artifactId>google-cloud-translate</artifactId>
             <version>LATEST</version>
         </dependency>
         <dependency>
