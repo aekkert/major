@@ -516,11 +516,11 @@ public final class Bot extends TelegramLongPollingCommandBot {
         buttonsRow.add(button);
         rowList.add(buttonsRow);
 
-        button = new InlineKeyboardButton();
-        button.setText("Отложить публикацию");
-        button.setCallbackData("#" + o.getString("postid") + "#DELAY");
-        buttonsRow.add(button);
-        rowList.add(buttonsRow);
+//        button = new InlineKeyboardButton();
+//        button.setText("Отложить публикацию");
+//        button.setCallbackData("#" + o.getString("postid") + "#DELAY");
+//        buttonsRow.add(button);
+//        rowList.add(buttonsRow);
 
         markup.setKeyboard(rowList);
         
