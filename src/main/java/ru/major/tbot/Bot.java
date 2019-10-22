@@ -3,6 +3,8 @@ package ru.major.tbot;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -47,20 +49,34 @@ import ru.major.web.AlertManager;
  * @author alex
  */
 public final class Bot extends TelegramLongPollingCommandBot {
-//    private static final String BOT_NAME = "ekkerttestbot";
+//    private static final String BOT_NAME = "alextestbot";
     private static final String BOT_NAME = "Главный в инстаграм";
-//    private static final String BOT_TOKEN = "929421719:AAGBsK8n6A2GqSOMd9Gz38lFvx3BWhqXP2o" /*ekkerttestbot*/;
+//    private static final String BOT_TOKEN = "955335597:AAFC3m5RZ65qCQMGVNr7e-huVFSP7Vg6lV0" /*ekkerttestbot*/;
     private static final String BOT_TOKEN = "978242904:AAEcLWZnu1gw2IrMGepTrxuvrmGm3qeJblU"/*InstaMajor_bot*/;
+    private static final String PROXY_HOST = "103.72.153.226"; /* proxy host */
+    private static final Integer PROXY_PORT = 8000;            /* proxy port */
+    private static final String PROXY_USER = "QPnDHG";          /* proxy user */
+    private static final String PROXY_PASSWORD = "EAu7GD";      /* proxy password */
+    
     private static volatile Bot instance;
     
     public static Bot getInstance() {
         if (instance == null) {
             synchronized (Bot.class) {
                 if (instance == null) {
+                    Authenticator.setDefault(new Authenticator() {
+                        @Override
+                        protected PasswordAuthentication getPasswordAuthentication() {
+                            return new PasswordAuthentication(PROXY_USER, PROXY_PASSWORD.toCharArray());
+                        }
+                    });
                     ApiContextInitializer.init();
                     TelegramBotsApi telegram = new TelegramBotsApi();
                     DefaultBotOptions botOptions = ApiContext.getInstance(DefaultBotOptions.class);
-
+                    botOptions.setProxyHost(PROXY_HOST);
+                    botOptions.setProxyPort(PROXY_PORT);
+                    botOptions.setProxyType(DefaultBotOptions.ProxyType.SOCKS5);
+                    
                     Bot bot = new Bot(botOptions);
                     try {
                         telegram.registerBot(bot);
@@ -230,8 +246,7 @@ public final class Bot extends TelegramLongPollingCommandBot {
                 SendMessage message = new SendMessage().setChatId(update.getCallbackQuery().getMessage().getChatId())
                     .setReplyToMessageId(update.getCallbackQuery().getMessage().getMessageId())
                     .setReplyMarkup(key)
-                    .setText("На сколько часов отложить публикацию.")
-                    .setParseMode("HTML");
+                    .setText("На сколько часов отложить публикацию.");
                 try {
                     execute(message);
                 } catch (TelegramApiException e) {
@@ -303,6 +318,15 @@ public final class Bot extends TelegramLongPollingCommandBot {
                         } catch (TelegramApiException e) {
                             Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, e);
                         }
+                    } else if (res.contains("отложить")) {
+                        DataEng data = new DataEng();
+                        Map<String, String[]> params = new HashMap();
+                        params.put("delay", new String[]{msg.getText()});
+                        JSONArray rs = data.getData(120, params);
+                        String result = rs.getJSONObject(0).getString("firstdt");
+                        SendMessage message = new SendMessage().setChatId(update.getMessage().getChatId())
+                                .setText("Success".equals(result) ? "Данные \"" + replMsg.getText() + "\" успешно сохранены" : "Ошибка сохренения \"" + replMsg.getText() + "\"");
+                        
                     } else {
                         DataEng data = new DataEng();
                         Map<String, String[]> params = new HashMap();

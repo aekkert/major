@@ -2,6 +2,8 @@ package ru.major.objects;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -16,7 +18,9 @@ import ru.major.web.Action;
 import ru.major.web.Mailer;
 import ru.major.web.SessionHandler;
 import java.net.*;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.util.Date;
 import java.util.HashMap;
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
@@ -25,6 +29,7 @@ import org.ehcache.config.builders.CacheManagerBuilder;
 import org.ehcache.config.builders.ExpiryPolicyBuilder;
 import org.ehcache.config.builders.ResourcePoolsBuilder;
 import ru.major.tbot.Bot;
+import ru.major.util.Currency;
 import ru.major.util.NewCache;
 import ru.major.web.AlertManager;
 /**
@@ -41,6 +46,13 @@ public class Task extends DataEng implements Action {
                     CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, JSONObject.class,ResourcePoolsBuilder.heap(100))
                 .withLoaderWriter(new NewCache())
                 .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(30)))
+                .build()).build(true);
+
+    protected static final CacheManager CACHE_MANAGER1 = CacheManagerBuilder.newCacheManagerBuilder()
+                .withCache("currencyCache",
+                    CacheConfigurationBuilder.newCacheConfigurationBuilder(Date.class, JSONObject.class,ResourcePoolsBuilder.heap(100))
+                .withLoaderWriter(new Currency())
+                .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(180)))
                 .build()).build(true);
 
     @Override
@@ -85,7 +97,12 @@ public class Task extends DataEng implements Action {
                     items = workInsta(request);
                     break;                    
                 case "post":
-                    items = workTask(request, 100);
+                    //items = workTask(request, 100);
+                    items = workPost(request);
+                    break;
+                case "pre":
+                    //items = workTask(request, 100);
+                    items = workPre(request);
                     break;
                 case "resetpass":
                     items = workReset(request);
@@ -173,7 +190,51 @@ public class Task extends DataEng implements Action {
         }
         return rs;        
     }
-    
+
+    private JSONArray workPre(HttpServletRequest request){
+        Settings s = new Settings();
+        JSONArray rs = new org.json.JSONArray();
+        JSONObject o = new org.json.JSONObject();
+        
+        o.put("requestpay", s.getPre());
+        Double curr = 1.0;
+        try {
+            SimpleDateFormat ff = new SimpleDateFormat("dd.MM.yyyy");
+            Date dt = ff.parse(ff.format(new Date()));
+            curr = (Double) getJsDetails(dt).getJSONObject("Valute").getJSONObject("USD").get("Value");
+        } catch (Exception e) {}
+        o.put("requestpay$", Double.toString(round(Double.parseDouble(o.getString("requestpay")) / curr, 2)));
+        o.put("currencyrate", Double.toString(curr));
+        rs.put(o);
+        return rs;        
+    }
+
+    private JSONArray workPost(HttpServletRequest request){
+        JSONArray rs = null;
+        rs = workTask(request, 100);
+        for (int i = 0 ; i < rs.length(); i++) {
+            Double curr = 1.0;
+            try {
+                SimpleDateFormat ff = new SimpleDateFormat("dd.MM.yyyy");
+                Date dt = ff.parse(ff.format(new Date()));
+                curr = (Double) getJsDetails(dt).getJSONObject("Valute").getJSONObject("USD").get("Value");
+            } catch (Exception e) {}
+            rs.getJSONObject(i).put("requestpay$", Double.toString(round(Double.parseDouble(rs.getJSONObject(i).getString("requestpay")) / curr, 2)));
+            rs.getJSONObject(i).put("ratepay$", Double.toString(round(Double.parseDouble(rs.getJSONObject(i).getString("ratepay")) / curr, 2)));
+            rs.getJSONObject(i).put("ratesum$", Double.toString(round(Double.parseDouble(rs.getJSONObject(i).getString("ratesum")) / curr, 2)));
+            rs.getJSONObject(i).put("currencyrate", Double.toString(curr));
+        }
+        return rs;        
+    }
+
+    private static double round(double value, int places) {
+        if (places < 0) throw new IllegalArgumentException();
+
+        BigDecimal bd = new BigDecimal(Double.toString(value));
+        bd = bd.setScale(places, RoundingMode.HALF_UP);
+        return bd.doubleValue();
+    }
+
     private JSONArray workStat(HttpServletRequest request) {
         JSONArray rs = new org.json.JSONArray();
         try {
@@ -248,6 +309,11 @@ public class Task extends DataEng implements Action {
         return jsCache.get(key);
     }
     
+    public JSONObject getJsDetails(Date key){
+        final Cache<Date, JSONObject> currencyCache = CACHE_MANAGER.getCache("currencyCache", Date.class, JSONObject.class);
+        return currencyCache.get(key);
+    }
+
     private JSONArray workRecall(HttpServletRequest request) {
         JSONArray rs  = new org.json.JSONArray();
         JSONArray res = new org.json.JSONArray();

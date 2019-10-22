@@ -57,4 +57,10 @@ public class Settings extends DataEng implements Action {
         }
         return res;
     }
+
+    public String getPre() {
+        Cache c = Cache.getInstance();
+        return c.getSett("requestPay");
+    }
+
 }

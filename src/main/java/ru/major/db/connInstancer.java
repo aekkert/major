@@ -5,7 +5,6 @@
 package ru.major.db;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Locale;
 import java.util.logging.Level;
@@ -14,8 +13,6 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
-import oracle.jdbc.OracleDriver;
-import org.apache.commons.dbcp2.BasicDataSource;
 
 /**
  *
@@ -57,14 +54,8 @@ public class connInstancer {
         boolean isConnected = false;
         try {
             connInstancer ci = getInstance();
-            BasicDataSource ds = (BasicDataSource)ci.m_ds;
-            String cnn_url = ds.getUrl();
-            String cnn_user = ds.getUsername();
-            String cnn_pass = ds.getPassword();
             Connection cn = null;
-            DriverManager.registerDriver(new OracleDriver());
-            DriverManager.setLoginTimeout(5);
-            cn = DriverManager.getConnection(cnn_url, cnn_user, cnn_pass);
+            cn = ci.m_ds.getConnection();
             if(cn != null) {
                 isConnected = true;
             }
